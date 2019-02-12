@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+
+[[ -n $DEBUG ]] && set -x
+
+set -eou pipefail
+
+usage() {
+  cat <<"EOF"
+USAGE:
+  gcloudctx                       : list the contexts
+  gcloudctx <NAME>                : switch to context <NAME>
+  gcloudctx -c <NAM               : create context <NAME>
+  gcloudctx -d <NAME> [<NAME...>] : delete context <NAME>
+  gcloudctx -h,--help             : show this message
+EOF
+}
+
+current_context() {
+  gcloud config  configurations list --format='json' | jq '.[] | select(.is_active==true) | .name'
+}
+
+get_contexts() {
+  gcloud config  configurations list --format='' #| jq '.[].name'
+}
+
+create_context() {
+  gcloud config configurations create "${1}"
+  gcloud auth login
+  gcloud config set project "${1}"
+}
+
+switch_context() {
+  gcloud config configurations activate "${1}"
+}
+
+delete_context() {
+  gcloud config configurations delete "${1}"
+}
+
+main() {
+  if [[ "$#" -eq 0 ]]; then
+      get_contexts
+  elif [[ "${1}" == "-d" ]]; then
+    if [[ "$#" -lt 2 ]]; then
+      echo "error: missing context NAME" >&2
+      usage
+      exit 1
+    fi
+    delete_context "${2}"
+  elif [[ "${1}" == "-c" ]]; then
+    if [[ "$#" -lt 2 ]]; then
+      echo "error: missing context NAME" >&2
+      usage
+      exit 1
+    fi
+    create_context "${2}"
+  elif [[ "$#" -gt 1 ]]; then
+    echo "error: too many arguments" >&2
+    usage
+    exit 1
+  elif [[ "$#" -eq 1 ]]; then
+    if [[ "${1}" == '-h' || "${1}" == '--help' ]]; then
+      usage
+    elif [[ "${1}" =~ ^-(.*) ]]; then
+      echo "error: unrecognized flag \"${1}\"" >&2
+      usage
+      exit 1
+    else
+      switch_context "${1}"
+    fi
+  else
+    usage
+    exit 1
+  fi
+}
+
+main "$@"
